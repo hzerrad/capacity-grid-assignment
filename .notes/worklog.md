@@ -59,3 +59,17 @@ The first round of tests I drafted lacked several edge cases. Houssem pushed bac
 - PATCH: 0 and 168 must be accepted (only rejections were tested), oversized bodies rejected.
 - DB down: both endpoints return a JSON 500 without leaking connection details (tested with a pool pointing at a closed port).
 - Mutations checked: off-by-one on the cap and on the hours bound, unclipped day join, filter ignoring weekends mode, inner join dropping idle people, unstable page order, no body cap, leaking DB errors — each fails at least one test.
+
+## Handover — knowingly left unfinished
+
+- **UI state outside the URL:** only the range is in the URL; the weekends toggle, over-allocated filter and page reset on reload.
+- **Over-allocated-only view after a fix:** saving hours that resolve someone's over-allocation removes their row on the refetch. Correct, but abrupt; I'd keep the row (marked resolved) until the user moves on.
+- **Failed range load:** the grid keeps the last loaded weeks under a "Couldn't refresh" banner, but the range label above shows the requested range. The banner explains it; a cleaner version would show the loaded range on the label too.
+- **Domain gaps (schema is fixed):** no holidays or time off (1 Jan counts as a workday), no per-person work schedules (the weekends toggle stands in for them), no history on `weekly_hours` (edits rewrite past weeks), last-write-wins on concurrent edits (no version column for If-Match).
+- **Scale:** 26 weeks × 500 people ≈ 115ms. Levers at ~3k people: computing weekday overlap per assignment instead of expanding days; row virtualisation if page sizes grow. Name search and team filter not built.
+- **API integration tests** run against the shared dev database and restore what they change; they should get a throwaway DB or a rolled-back transaction, and both suites belong in CI.
+
+## Final checks
+
+- **Fresh start:** `make reset` (volume wiped, seed reloaded: 126,195 assignments), web container installs TanStack Query from the lockfile on start; grid shows the same numbers for the five curated people.
+- **Light mode** (first time checked): over-allocated cells were a pale pink while "exactly full" was saturated amber, so the eye went to the wrong state first. Light-mode red strengthened (text contrast 5.5:1) so over-allocation is the loudest colour in both themes.
