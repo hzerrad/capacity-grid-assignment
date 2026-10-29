@@ -119,6 +119,7 @@ function WeeklyHoursEditor({ person }: { person: CapacityPerson }) {
     return (
       <form
         className="hours-form"
+        noValidate
         onSubmit={(e) => {
           e.preventDefault()
           save(draft)
