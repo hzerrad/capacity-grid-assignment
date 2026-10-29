@@ -28,14 +28,20 @@ export function CapacityGrid({ from, to, onRangeChange }: Props) {
   const [weekends, setWeekends] = useState<Weekends>('separate')
   const [overOnly, setOverOnly] = useState(false)
   const [offset, setOffset] = useState(0)
-  const { data, error, isPending, isFetching, isPlaceholderData, refetch } = useCapacity({
-    from,
-    to,
-    weekends,
-    overOnly,
-    limit: PAGE_SIZE,
-    offset,
-  })
+  const {
+    data: fresh,
+    error,
+    isPending,
+    isFetching,
+    isPlaceholderData,
+    refetch,
+  } = useCapacity({ from, to, weekends, overOnly, limit: PAGE_SIZE, offset })
+
+  // placeholderData is dropped once a query errors, so keep the last grid ourselves.
+  const [lastLoaded, setLastLoaded] = useState(fresh)
+  if (fresh && fresh !== lastLoaded) setLastLoaded(fresh)
+  const data = fresh ?? lastLoaded
+  const stale = isPlaceholderData || fresh === undefined
 
   return (
     <section className="capacity" aria-busy={isFetching}>
@@ -101,7 +107,7 @@ export function CapacityGrid({ from, to, onRangeChange }: Props) {
         </div>
       ) : (
         <>
-          <div className={`grid-scroll${isPlaceholderData ? ' is-stale' : ''}`}>
+          <div className={`grid-scroll${stale ? ' is-stale' : ''}`}>
             <table className="grid">
               <caption className="sr-only">Allocated hours against capacity, per person, per week</caption>
               <thead>
