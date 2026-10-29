@@ -63,6 +63,7 @@ cells AS (
   FROM people p
   CROSS JOIN (SELECT DISTINCT week_start FROM days) w
   LEFT JOIN allocations al ON al.person_id = p.id AND al.week_start = w.week_start
+  WHERE $7::int IS NULL OR p.id = $7
 ),
 rows AS (
   SELECT id, name, weekly_hours,
@@ -81,7 +82,7 @@ LEFT JOIN LATERAL (
   SELECT * FROM rows ORDER BY name, id LIMIT $5 OFFSET $6
 ) page ON true`
 
-// handleCapacity serves GET /api/capacity?from=&to=&weekends=separate|count&over=&limit=&offset=
+// handleCapacity serves GET /api/capacity?from=&to=&weekends=separate|count&over=&limit=&offset=&person=
 //
 // from/to snap out to whole Monday–Sunday weeks. Weekday hours count against
 // capacity; weekend hours are reported separately unless weekends=count.
@@ -136,7 +137,18 @@ func (s *server) handleCapacity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := s.db.Query(r.Context(), capacityQuery, from, to, weekends == "count", overOnly, limit, offset)
+	var person *int32
+	if v := q.Get("person"); v != "" {
+		id, err := strconv.ParseInt(v, 10, 32)
+		if err != nil || id < 1 {
+			writeError(w, http.StatusBadRequest, "person must be a person id")
+			return
+		}
+		p := int32(id)
+		person = &p
+	}
+
+	rows, err := s.db.Query(r.Context(), capacityQuery, from, to, weekends == "count", overOnly, limit, offset, person)
 	if err != nil {
 		log.Printf("capacity query: %v", err)
 		writeError(w, http.StatusInternalServerError, "could not load capacity")

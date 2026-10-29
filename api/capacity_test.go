@@ -221,3 +221,12 @@ func TestCapacityDatabaseDown(t *testing.T) {
 		t.Errorf("error leaks connection details: %s", body)
 	}
 }
+
+func TestCapacitySinglePerson(t *testing.T) {
+	s := dbServer(t)
+	resp := decode[capacityResponse](t, do(t, s, http.MethodGet, "/api/capacity?from=2026-01-05&to=2026-01-11&person=4", ""), http.StatusOK)
+	if resp.Total != 1 || len(resp.People) != 1 || resp.People[0].Name != "Dee Okafor" || resp.People[0].Cells[0].Allocated != 45 {
+		t.Errorf("person=4: total %d, people %+v", resp.Total, resp.People)
+	}
+	assertError(t, do(t, &server{}, http.MethodGet, "/api/capacity?from=2026-01-05&to=2026-01-11&person=abc", ""), http.StatusBadRequest)
+}
