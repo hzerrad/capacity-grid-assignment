@@ -33,6 +33,7 @@ left unfinished. Append as you go; a line or two per entry is right.
 - **API tests:** validation tests run anywhere (handlers reject before touching the DB); query/PATCH tests need the seeded compose DB and skip without `DATABASE_URL`. Run with:
   `docker run --rm --network capacity-grid-assignment_default -e 'DATABASE_URL=postgres://capacity:capacity@db:5432/capacity?sslmode=disable' -v "$PWD/api":/src -w /src golang:1.26-alpine go test ./...`
   They assert the hand-computed numbers for the five curated people, so a mis-summed or weekend-counting query fails loudly (checked by breaking the weekday filter: 3 tests fail). The PATCH test edits Dee and restores her in `t.Cleanup` — it writes to the shared dev DB, so don't run it against anything you care about.
+- **Query cost grows with total history, not the requested range:** the overlap filter `start_date <= to AND end_date >= from` on the existing B-tree `(start_date, end_date)` can only bound one side — `start_date <= to` matches every assignment that started before the range ends. Measured on the seed: June 2025 (start of history) uses the index, reads ~9k rows, 4.6ms; December 2026 (end of history) falls back to a seq scan, reads 126k to keep 7.5k, 14ms. The slow end is the recent weeks managers view most, and at ~3k people × 2 years it's ~750k rows per request. Fix is a GiST index on `daterange(start_date, end_date, '[]')` queried with `&&` — a schema change, so deferred (schema is fixed input).
 
 ## Test review
 
@@ -67,6 +68,7 @@ The first round of tests I drafted lacked several edge cases. Houssem pushed bac
 - **Failed range load:** the grid keeps the last loaded weeks under a "Couldn't refresh" banner, but the range label above shows the requested range. The banner explains it; a cleaner version would show the loaded range on the label too.
 - **Domain gaps (schema is fixed):** no holidays or time off (1 Jan counts as a workday), no per-person work schedules (the weekends toggle stands in for them), no history on `weekly_hours` (edits rewrite past weeks), last-write-wins on concurrent edits (no version column for If-Match).
 - **Scale:** 26 weeks × 500 people ≈ 115ms. Levers at ~3k people: computing weekday overlap per assignment instead of expanding days; row virtualisation if page sizes grow. Name search and team filter not built.
+- **Range index before any query rewrite:** at ~3k people × 2 years the first lever is a range (GiST) index on `daterange(start_date, end_date)`, since the latest weeks already scan all history (see Implementation). Needs a schema change.
 - **API integration tests** run against the shared dev database and restore what they change; they should get a throwaway DB or a rolled-back transaction, and both suites belong in CI.
 
 ## Final checks
