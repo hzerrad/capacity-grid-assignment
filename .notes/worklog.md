@@ -30,3 +30,6 @@ left unfinished. Append as you go; a line or two per entry is right.
 - **Rollback is targeted, not a cache snapshot:** onError restores only that person's previous hours. Restoring a whole-cache snapshot would also wipe another row's in-flight optimistic edit.
 - **Rollback test** makes every load after the first hang, so the refetch can't restore the value and mask a missing rollback — confirmed it fails with the rollback removed.
 - **Known, left as is:** with "Over-allocated only" on, a save that fixes someone removes their row on the refetch (correct, but abrupt). Weekends toggle / filter / page aren't in the URL — only the range is.
+- **API tests:** validation tests run anywhere (handlers reject before touching the DB); query/PATCH tests need the seeded compose DB and skip without `DATABASE_URL`. Run with:
+  `docker run --rm --network capacity-grid-assignment_default -e 'DATABASE_URL=postgres://capacity:capacity@db:5432/capacity?sslmode=disable' -v "$PWD/api":/src -w /src golang:1.26-alpine go test ./...`
+  They assert the hand-computed numbers for the five curated people, so a mis-summed or weekend-counting query fails loudly (checked by breaking the weekday filter: 3 tests fail). The PATCH test edits Dee and restores her in `t.Cleanup` — it writes to the shared dev DB, so don't run it against anything you care about.
