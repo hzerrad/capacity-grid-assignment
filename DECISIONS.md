@@ -10,7 +10,7 @@ and why?
 
 - Weekend treatment was unclear so I opted for Monday - Sunday weeks. For capacity, I treated Monday - Friday as working days, following Toggl Focus's default. Weekend hours stay visible separately, with a toggle to count them against capacity because the brief doesn't define work schedules. 
 - I put the editor beside each person's name because weekly hours belong to the person. With the fixed schemas, edits also change historical weeks. 
-- I update the row optimistically, restore only that person's previous hours on failure, then refetch to reconcile with the server. I keep the typed value and show an inline error with a retry button. 
+- I update only the typed weekly hours optimistically and show that row as recalculating, then refetch just that person's row from the server. Capacity is derived on the server. On failure I restore the previous hours, keep the typed value and show an inline error with a retry button. 
 - I return weeks once, with each person's cells aligned to them. I send capacity per cell so future holidays or schedule changes won't need a different response format. 
 - I chose server-side pagination and an overallocated filter so overloaded people aren't hidden on other pages. Requests are capped at 26 weeks; longer history requires smaller ranges.
 
