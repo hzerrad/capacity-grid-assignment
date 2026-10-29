@@ -45,7 +45,7 @@ export function CapacityGrid({ from, to, onRangeChange }: Props) {
 
   return (
     <section className="capacity" aria-busy={isFetching}>
-      <RangeControls from={from} to={to} onRangeChange={onRangeChange} />
+      <RangeControls from={from} to={to} onRangeChange={onRangeChange} shown={data && { from: data.from, to: data.to }} />
 
       <div className="filters">
         <label>
@@ -138,7 +138,7 @@ export function CapacityGrid({ from, to, onRangeChange }: Props) {
   )
 }
 
-function RangeControls({ from, to, onRangeChange }: Props) {
+function RangeControls({ from, to, onRangeChange, shown = { from, to } }: Props & { shown?: DateRange }) {
   const [notice, setNotice] = useState('')
   const weeks = weekCount({ from, to })
 
@@ -195,7 +195,8 @@ function RangeControls({ from, to, onRangeChange }: Props) {
         />
       </label>
       <span className="range-summary">
-        {formatDate(from)} – {formatDate(to)} · {weeks} {weeks === 1 ? 'week' : 'weeks'}
+        {shown.from === from && shown.to === to ? '' : 'Showing '}
+        {formatDate(shown.from)} – {formatDate(shown.to)} · {weekCount(shown)} {weekCount(shown) === 1 ? 'week' : 'weeks'}
       </span>
       {notice && (
         <span className="range-notice" role="status">

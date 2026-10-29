@@ -152,6 +152,7 @@ describe('loading and failures', () => {
 
     expect(await screen.findByText(/Couldn't refresh: database unavailable/)).toBeInTheDocument()
     expect(screen.getByText('45 / 40')).toBeInTheDocument()
+    expect(screen.getByText(/Showing 5 Jan 2026 – 11 Jan 2026/)).toBeInTheDocument()
   })
 
   it('ignores a response that arrives after the user has moved on', async () => {
