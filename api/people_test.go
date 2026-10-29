@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -29,6 +31,27 @@ func TestUpdatePersonRejectsBadInput(t *testing.T) {
 	}
 }
 
+func TestUpdatePersonRejectsOversizedBody(t *testing.T) {
+	s := &server{}
+	body := strings.Repeat(" ", 2048) + `{"weeklyHours":40}`
+	assertError(t, do(t, s, http.MethodPatch, "/api/people/1", body), http.StatusBadRequest)
+}
+
+func TestUpdatePersonDatabaseDown(t *testing.T) {
+	assertError(t, do(t, unreachableServer(t), http.MethodPatch, "/api/people/1", `{"weeklyHours":40}`), http.StatusInternalServerError)
+}
+
+func TestUpdatePersonAcceptsBounds(t *testing.T) {
+	s := dbServer(t)
+	restoreDee(t, s)
+	for _, hours := range []float64{0, maxWeeklyHours} {
+		p := decode[person](t, do(t, s, http.MethodPatch, "/api/people/4", fmt.Sprintf(`{"weeklyHours":%v}`, hours)), http.StatusOK)
+		if p.WeeklyHours != hours {
+			t.Errorf("saved %v, got %v", hours, p.WeeklyHours)
+		}
+	}
+}
+
 func TestUpdatePersonNotFound(t *testing.T) {
 	s := dbServer(t)
 	assertError(t, do(t, s, http.MethodPatch, "/api/people/999999", `{"weeklyHours":40}`), http.StatusNotFound)
@@ -36,13 +59,7 @@ func TestUpdatePersonNotFound(t *testing.T) {
 
 func TestUpdatePersonFlowsIntoCapacity(t *testing.T) {
 	s := dbServer(t)
-	var original float64
-	if err := s.db.QueryRow(context.Background(), `SELECT weekly_hours::float8 FROM people WHERE id = 4`).Scan(&original); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		_, _ = s.db.Exec(context.Background(), `UPDATE people SET weekly_hours = $1 WHERE id = 4`, original)
-	})
+	restoreDee(t, s)
 
 	p := decode[person](t, do(t, s, http.MethodPatch, "/api/people/4", `{"weeklyHours":37.5}`), http.StatusOK)
 	if p.ID != 4 || p.Name != "Dee Okafor" || p.WeeklyHours != 37.5 {
@@ -59,4 +76,15 @@ func TestUpdatePersonFlowsIntoCapacity(t *testing.T) {
 		}
 	}
 	t.Error("Dee should be over-allocated (40 / 37.5) in the week of 2026-01-12 after the edit")
+}
+
+func restoreDee(t *testing.T, s *server) {
+	t.Helper()
+	var original float64
+	if err := s.db.QueryRow(context.Background(), `SELECT weekly_hours::float8 FROM people WHERE id = 4`).Scan(&original); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = s.db.Exec(context.Background(), `UPDATE people SET weekly_hours = $1 WHERE id = 4`, original)
+	})
 }

@@ -25,6 +25,17 @@ func dbServer(t *testing.T) *server {
 	return &server{db: db}
 }
 
+// unreachableServer has a pool pointing at a closed port, for error paths.
+func unreachableServer(t *testing.T) *server {
+	t.Helper()
+	db, err := openDB(context.Background(), "postgres://capacity:capacity@127.0.0.1:1/capacity?sslmode=disable&connect_timeout=1")
+	if err != nil {
+		t.Fatalf("pool: %v", err)
+	}
+	t.Cleanup(db.Close)
+	return &server{db: db}
+}
+
 func do(t *testing.T, s *server, method, target, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	var r io.Reader
