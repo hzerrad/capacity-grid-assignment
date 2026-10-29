@@ -33,3 +33,29 @@ left unfinished. Append as you go; a line or two per entry is right.
 - **API tests:** validation tests run anywhere (handlers reject before touching the DB); query/PATCH tests need the seeded compose DB and skip without `DATABASE_URL`. Run with:
   `docker run --rm --network capacity-grid-assignment_default -e 'DATABASE_URL=postgres://capacity:capacity@db:5432/capacity?sslmode=disable' -v "$PWD/api":/src -w /src golang:1.26-alpine go test ./...`
   They assert the hand-computed numbers for the five curated people, so a mis-summed or weekend-counting query fails loudly (checked by breaking the weekday filter: 3 tests fail). The PATCH test edits Dee and restores her in `t.Cleanup` — it writes to the shared dev DB, so don't run it against anything you care about.
+
+## Test review
+
+The first round of tests I drafted lacked several edge cases. Houssem pushed back on them: were they testing real behaviour, what we had agreed, and what the brief says it judges (editing flow; loading, failing and late responses; correctness after a save)? They weren't, fully, so at Houssem's request I audited both ends against that and wrote the missing tests. I checked every new test by breaking the behaviour it covers and confirming it fails.
+
+**Frontend — what was missing** (first draft: cell status, date maths in UTC only, one rollback test):
+- Date maths only ran in UTC — the container's timezone — so the local-time bug the UTC helpers exist to prevent could never fail. Now runs under UTC, UTC−10 and UTC+14 (Honolulu parses `2025-12-29` as a Sunday with local dates).
+- Nothing covered the reconcile half of "optimistic → refetch": a save that succeeds but where the server returns different numbers. Now asserted, plus the ⚠ and "1 week over" clearing when a save fixes the over-allocation.
+- No retry, discard, invalid input, Escape, or "unchanged value sends nothing".
+- Nothing on loading/failure: skeleton on first load, keeping the old grid during navigation, load failure + retry, refresh failure keeping the old grid.
+- Nothing on late responses. The new test answers the newer request first and the older one last; confirmed it fails against a naive `useEffect` fetch without cancellation.
+- Nothing on what the controls send: week shift, the 26-week cap, filter params, and "filtering returns to page 1".
+
+**Bugs the new frontend tests found:**
+- A range that failed to load replaced the grid with the full error panel. TanStack v5 drops `placeholderData` once the query errors, so `data` goes undefined. The earlier browser check missed it because it failed a refresh of the *same* range. The grid now keeps the last loaded data and shows the "Couldn't refresh" banner. Side effect: while it shows, the range label says the new range and the columns show the old one — the banner says so, left as is.
+- `max={168}` on the input let the browser's native validation block submit before ours ran; managers got a native tooltip instead of the inline message. Added `noValidate`.
+
+**Backend — what was missing** (first draft: validation 400s, curated numbers, weekends=count, over filter, a two-page overlap check, 404, PATCH → capacity):
+- Range clipping: bookings straddling `from`/`to` must only contribute days inside the range (Bo's Fri→Mon booking: 8h when the range starts Monday 12 Jan, 32h + 16h weekend when it ends Sunday 11 Jan).
+- People with no bookings came back in the count but their cells (0 against real capacity) weren't checked.
+- Pagination: walking every page must return all 500 people exactly once. The old overlap check passed even with a non-unique `ORDER BY` — removed it, kept its past-the-end case.
+- The 26-week cap at its boundary (26 ok, 27 rejected) and a single-day range → one week.
+- The over-allocated filter must follow the weekends rule (146 with weekends counted, not 41) — the reason the filter lives on the server.
+- PATCH: 0 and 168 must be accepted (only rejections were tested), oversized bodies rejected.
+- DB down: both endpoints return a JSON 500 without leaking connection details (tested with a pool pointing at a closed port).
+- Mutations checked: off-by-one on the cap and on the hours bound, unclipped day join, filter ignoring weekends mode, inner join dropping idle people, unstable page order, no body cap, leaking DB errors — each fails at least one test.
