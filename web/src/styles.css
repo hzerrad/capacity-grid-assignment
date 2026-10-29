@@ -241,6 +241,10 @@ thead .person-col {
   background: color-mix(in srgb, var(--under) calc(var(--fill) * 30%), transparent);
 }
 
+.cell--pending {
+  color: var(--muted);
+}
+
 .cell--full {
   background: var(--full);
 }

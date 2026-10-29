@@ -185,29 +185,30 @@ describe('editing weekly hours', () => {
 
     editWeeklyHours('Dee Okafor', '50')
 
-    expect(await screen.findByText('45 / 50')).toBeInTheDocument()
-    expect(screen.queryByText('⚠ +5h')).not.toBeInTheDocument()
-    expect(screen.queryByText('1 week over')).not.toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /Weekly hours for Dee Okafor: 50/ })).toBeInTheDocument()
+    expect(screen.getByText('45 / …')).toBeInTheDocument()
 
     const save = await nextRequest('PATCH')
     expect(save.url.pathname).toBe('/api/people/4')
     expect(save.body).toEqual({ weeklyHours: 50 })
     save.respond({ id: 4, name: 'Dee Okafor', weeklyHours: 50 })
 
-    const refetch = await nextRequest()
-    refetch.respond(gridFor(refetch, [{ ...dee, weeklyHours: 50, allocated: [44] }]))
+    const row = await nextRequest()
+    expect(row.url.searchParams.get('person')).toBe('4')
+    row.respond(gridFor(row, [{ ...dee, weeklyHours: 50, allocated: [44] }]))
     expect(await screen.findByText('44 / 50')).toBeInTheDocument()
+    expect(screen.queryByText('⚠ +5h')).not.toBeInTheDocument()
+    expect(screen.queryByText('1 week over')).not.toBeInTheDocument()
   })
 
   it('rolls back and keeps the attempted value when the save fails', async () => {
     await renderGrid()
     editWeeklyHours('Dee Okafor', '50')
-    expect(await screen.findByText('45 / 50')).toBeInTheDocument()
+    expect(await screen.findByText('45 / …')).toBeInTheDocument()
 
     ;(await nextRequest('PATCH')).respond({ error: 'database unavailable' }, 500)
 
     expect(await screen.findByText(/Couldn't save 50 h\/wk: database unavailable/)).toBeInTheDocument()
-    // The refetch after the failure is still pending, so only the rollback can restore this.
     expect(screen.getByText('45 / 40')).toBeInTheDocument()
     expect(screen.getByText('⚠ +5h')).toBeInTheDocument()
   })
@@ -220,7 +221,7 @@ describe('editing weekly hours', () => {
 
     const retry = await nextRequest('PATCH')
     expect(retry.body).toEqual({ weeklyHours: 50 })
-    expect(await screen.findByText('45 / 50')).toBeInTheDocument()
+    expect(await screen.findByText('45 / …')).toBeInTheDocument()
     retry.respond({ id: 4, name: 'Dee Okafor', weeklyHours: 50 })
 
     await waitFor(() => expect(screen.queryByText(/Couldn't save/)).not.toBeInTheDocument())

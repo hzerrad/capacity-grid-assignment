@@ -1,7 +1,8 @@
 import { memo, useState, type CSSProperties } from 'react'
 import type { CapacityCell, CapacityPerson, Weekends } from './api'
 import { cellStatus, formatHours, parseWeeklyHours } from './capacity'
-import { useUpdateWeeklyHours } from './queries'
+import { useIsMutating } from '@tanstack/react-query'
+import { useUpdateWeeklyHours, weeklyHoursKey } from './queries'
 
 type Props = {
   person: CapacityPerson
@@ -10,7 +11,8 @@ type Props = {
 }
 
 export const PersonRow = memo(function PersonRow({ person, weeks, weekends }: Props) {
-  const overWeeks = person.cells.filter((c) => cellStatus(c) === 'over').length
+  const recalculating = useIsMutating({ mutationKey: weeklyHoursKey(person.id) }) > 0
+  const overWeeks = recalculating ? 0 : person.cells.filter((c) => cellStatus(c) === 'over').length
   return (
     <tr>
       <th scope="row" className="person-col">
@@ -25,13 +27,23 @@ export const PersonRow = memo(function PersonRow({ person, weeks, weekends }: Pr
         </div>
       </th>
       {person.cells.map((cell, i) => (
-        <Cell key={weeks[i]} cell={cell} weekends={weekends} />
+        <Cell key={weeks[i]} cell={cell} weekends={weekends} recalculating={recalculating} />
       ))}
     </tr>
   )
 })
 
-function Cell({ cell, weekends }: { cell: CapacityCell; weekends: Weekends }) {
+function Cell({ cell, weekends, recalculating }: { cell: CapacityCell; weekends: Weekends; recalculating: boolean }) {
+  if (recalculating) {
+    return (
+      <td className="cell cell--pending" title="Recalculating after the capacity change">
+        <span className="sr-only">{formatHours(cell.allocated)} hours allocated, recalculating capacity</span>
+        <span aria-hidden="true" className="cell-hours">
+          {formatHours(cell.allocated)} / …
+        </span>
+      </td>
+    )
+  }
   const status = cellStatus(cell)
   const fill = cell.capacity > 0 ? Math.min(cell.allocated / cell.capacity, 1) : 1
   const over = cell.allocated - cell.capacity
@@ -67,7 +79,7 @@ function Cell({ cell, weekends }: { cell: CapacityCell; weekends: Weekends }) {
 }
 
 function WeeklyHoursEditor({ person }: { person: CapacityPerson }) {
-  const mutation = useUpdateWeeklyHours()
+  const mutation = useUpdateWeeklyHours(person.id)
   const [draft, setDraft] = useState<string | null>(null)
   const [invalid, setInvalid] = useState('')
 
@@ -80,7 +92,7 @@ function WeeklyHoursEditor({ person }: { person: CapacityPerson }) {
     setInvalid('')
     setDraft(null)
     if (value !== person.weeklyHours) {
-      mutation.mutate({ id: person.id, weeklyHours: value, previous: person.weeklyHours })
+      mutation.mutate({ weeklyHours: value, previous: person.weeklyHours })
     }
   }
 

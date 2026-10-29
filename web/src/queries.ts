@@ -17,34 +17,43 @@ export function useCapacity(params: CapacityParams) {
   })
 }
 
-type UpdateVariables = { id: number; weeklyHours: number; previous: number }
+type UpdateVariables = { weeklyHours: number; previous: number }
 
-// Mirrors the server rule (capacity = weekly hours for a whole week) until the
-// refetch in onSettled replaces it with the real numbers.
-function applyWeeklyHours(client: QueryClient, id: number, weeklyHours: number) {
+export const weeklyHoursKey = (id: number) => ['weeklyHours', id] as const
+
+function setWeeklyHours(client: QueryClient, id: number, weeklyHours: number) {
   client.setQueriesData<CapacityResponse>({ queryKey: capacityKey }, (data) =>
-    data && {
-      ...data,
-      people: data.people.map((p) =>
-        p.id === id
-          ? { ...p, weeklyHours, cells: p.cells.map((c) => ({ ...c, capacity: weeklyHours })) }
-          : p,
-      ),
-    },
+    data && { ...data, people: data.people.map((p) => (p.id === id ? { ...p, weeklyHours } : p)) },
   )
 }
 
-export function useUpdateWeeklyHours() {
+// Capacity is derived on the server: refetch only this person's row, or the whole over-allocated view.
+async function refreshPerson(client: QueryClient, id: number) {
+  const views = client.getQueriesData<CapacityResponse>({ queryKey: capacityKey })
+  await Promise.all(
+    views.map(async ([key, data]) => {
+      const params = key[1] as CapacityParams | undefined
+      if (!data || !params || !data.people.some((p) => p.id === id)) return
+      if (params.overOnly) return client.invalidateQueries({ queryKey: key, exact: true })
+      const row = await fetchCapacity({ ...params, overOnly: false, offset: 0, person: id })
+      const fresh = row.people[0]
+      client.setQueryData<CapacityResponse>(key, (current) =>
+        current && fresh && { ...current, people: current.people.map((p) => (p.id === id ? fresh : p)) },
+      )
+    }),
+  )
+}
+
+export function useUpdateWeeklyHours(id: number) {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, weeklyHours }: UpdateVariables) => updateWeeklyHours(id, weeklyHours),
-    onMutate: async ({ id, weeklyHours }) => {
+    mutationKey: weeklyHoursKey(id),
+    mutationFn: ({ weeklyHours }: UpdateVariables) => updateWeeklyHours(id, weeklyHours),
+    onMutate: async ({ weeklyHours }) => {
       await client.cancelQueries({ queryKey: capacityKey })
-      applyWeeklyHours(client, id, weeklyHours)
+      setWeeklyHours(client, id, weeklyHours)
     },
-    onError: (_err, { id, previous }) => applyWeeklyHours(client, id, previous),
-    onSettled: () => {
-      void client.invalidateQueries({ queryKey: capacityKey })
-    },
+    onError: (_err, { previous }) => setWeeklyHours(client, id, previous),
+    onSuccess: () => refreshPerson(client, id),
   })
 }

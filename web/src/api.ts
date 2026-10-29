@@ -31,6 +31,7 @@ export type CapacityParams = {
   overOnly: boolean
   limit: number
   offset: number
+  person?: number
 }
 
 export type Person = {
@@ -77,6 +78,7 @@ export function fetchCapacity(params: CapacityParams, signal?: AbortSignal) {
     limit: String(params.limit),
     offset: String(params.offset),
   })
+  if (params.person !== undefined) search.set('person', String(params.person))
   return request<CapacityResponse>(`/api/capacity?${search}`, { signal })
 }
 
