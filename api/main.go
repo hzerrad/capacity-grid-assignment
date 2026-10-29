@@ -23,14 +23,7 @@ func main() {
 		dsn = "postgres://capacity:capacity@localhost:5432/capacity?sslmode=disable"
 	}
 
-	cfg, err := pgxpool.ParseConfig(dsn)
-	if err != nil {
-		log.Fatalf("parse dsn: %v", err)
-	}
-	// JIT compile time (~280ms) dwarfs the capacity query itself (~20ms).
-	cfg.ConnConfig.RuntimeParams["jit"] = "off"
-
-	db, err := pgxpool.NewWithConfig(ctx, cfg)
+	db, err := openDB(ctx, dsn)
 	if err != nil {
 		log.Fatalf("connect: %v", err)
 	}
@@ -48,13 +41,26 @@ func main() {
 
 	s := &server{db: db}
 
+	log.Println("listening on :8080")
+	log.Fatal(http.ListenAndServe(":8080", s.routes()))
+}
+
+func openDB(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		return nil, err
+	}
+	// JIT compile time (~280ms) dwarfs the capacity query itself (~20ms).
+	cfg.ConnConfig.RuntimeParams["jit"] = "off"
+	return pgxpool.NewWithConfig(ctx, cfg)
+}
+
+func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", s.handleHealth)
 	mux.HandleFunc("GET /api/capacity", s.handleCapacity)
 	mux.HandleFunc("PATCH /api/people/{id}", s.handleUpdatePerson)
-
-	log.Println("listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", mux))
+	return mux
 }
 
 func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
