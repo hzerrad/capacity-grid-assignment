@@ -75,3 +75,4 @@ The first round of tests I drafted lacked several edge cases. Houssem pushed bac
 
 - **Fresh start:** `make reset` (volume wiped, seed reloaded: 126,195 assignments), web container installs TanStack Query from the lockfile on start; grid shows the same numbers for the five curated people.
 - **Light mode** (first time checked): over-allocated cells were a pale pink while "exactly full" was saturated amber, so the eye went to the wrong state first. Light-mode red strengthened (text contrast 5.5:1) so over-allocation is the loudest colour in both themes.
+- **Range label after a failed load:** now resolved — while the grid is stale the label reads "Showing <loaded range>", so it always matches the columns (covered by the refresh-failure test).
