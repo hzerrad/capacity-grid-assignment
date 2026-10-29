@@ -23,7 +23,14 @@ func main() {
 		dsn = "postgres://capacity:capacity@localhost:5432/capacity?sslmode=disable"
 	}
 
-	db, err := pgxpool.New(ctx, dsn)
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		log.Fatalf("parse dsn: %v", err)
+	}
+	// JIT compile time (~280ms) dwarfs the capacity query itself (~20ms).
+	cfg.ConnConfig.RuntimeParams["jit"] = "off"
+
+	db, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		log.Fatalf("connect: %v", err)
 	}
@@ -63,4 +70,8 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+func writeError(w http.ResponseWriter, status int, msg string) {
+	writeJSON(w, status, map[string]string{"error": msg})
 }
